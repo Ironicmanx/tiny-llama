@@ -19,8 +19,8 @@ Clone the repo, download a model, build the runtime, and go:
 
 ```bash
 # Clone this repo
-git clone https://github.com/YOUR_USERNAME/jarvis_local.git
-cd jarvis_local
+git clone <thisrepo>
+cd echo_local
 
 # Download a quantized model
 # (Mistral 7B Instruct v0.2 Q4_0 from TheBloke on HuggingFace)
@@ -36,4 +36,4 @@ cmake --build . --config Release
 cd ../../
 
 # Run the assistant
-python3 jarvis.py
+python3 main.py
