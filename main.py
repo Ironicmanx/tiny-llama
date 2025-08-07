@@ -5,25 +5,25 @@
 from llm import ask_local_llm
 
 def main():
-    print("Jarvis: Ready for text commands. Type 'exit' to quit.")
+    print("Echo: Ready for text commands. Type 'exit' to quit.")
     while True:
         try:
             user_input = input("You: ").strip()
             if user_input.lower() == "exit":
-                print("Jarvis: Goodbye!")
+                print("Echo: Goodbye!")
                 break
             if not user_input:
                 continue
 
-            print("Jarvis: (thinking...)")
+            print("Echo: (thinking...)")
             response = ask_local_llm(user_input)
-            print("Jarvis:", response)
+            print("Echo:", response)
 
         except KeyboardInterrupt:
-            print("\nJarvis: Exiting.")
+            print("\nEcho: Exiting.")
             break
         except Exception as e:
-            print(f"Jarvis: [Error] {e}")
+            print(f"Echo: [Error] {e}")
 
 if __name__ == "__main__":
     main()

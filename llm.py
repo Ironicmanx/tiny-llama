@@ -6,7 +6,7 @@ MODEL_PATH = "/home/arttu/jarvis_local/models/mistral-7b-instruct-v0.2.Q4_0.gguf
 
 def ask_local_llm(prompt):
     formatted_prompt = f"[INST] {prompt} [/INST]"
-    print("\n[Jarvis Thinking] Sending prompt to LLM...")
+    print("\n[Echo Thinking] Sending prompt to LLM...")
     print(f"[Prompt] {formatted_prompt}")
 
     start = time.time()
