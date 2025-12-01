@@ -1,6 +1,7 @@
 import subprocess
 import time
 import select
+import os
 
 # You need two variables here: the path to your LLM executable and the path to your model file
 # You can get models from https://huggingface.co/models?search=gguf
@@ -23,7 +24,7 @@ def _read_output_nonblocking(process, timeout):
     last_output_time = start_time
     buffer = ""
     
-    # Make stdout non-blocking on Unix systems
+    # Get file descriptor for non-blocking reads
     fd = process.stdout.fileno()
     
     while True:
@@ -41,12 +42,14 @@ def _read_output_nonblocking(process, timeout):
         
         # Check if process is still running
         if process.poll() is not None:
-            # Process finished, read any remaining output
+            # Process finished, read any remaining output using os.read
             try:
-                remaining = process.stdout.read()
-                if remaining:
-                    buffer += remaining
-            except Exception:
+                while True:
+                    chunk = os.read(fd, 4096)
+                    if not chunk:
+                        break
+                    buffer += chunk.decode('utf-8', errors='replace')
+            except (OSError, BlockingIOError):
                 pass
             break
         
@@ -54,9 +57,10 @@ def _read_output_nonblocking(process, timeout):
         try:
             ready, _, _ = select.select([process.stdout], [], [], 0.5)
             if ready:
-                chunk = process.stdout.read(1024)
+                # Use os.read for non-blocking read
+                chunk = os.read(fd, 4096)
                 if chunk:
-                    buffer += chunk
+                    buffer += chunk.decode('utf-8', errors='replace')
                     last_output_time = time.time()
                     
                     # Process complete lines from buffer
@@ -65,7 +69,7 @@ def _read_output_nonblocking(process, timeout):
                         if line.strip():
                             print(f"[LLM] {line.strip()}")
                             output_lines.append(line)
-        except (OSError, ValueError):
+        except (OSError, ValueError, BlockingIOError):
             # Handle select errors gracefully
             break
     
@@ -180,7 +184,9 @@ def ask_local_llm(prompt):
             try:
                 stderr = process.stderr.read()
                 if stderr:
-                    print(f"[LLM STDERR] {stderr.strip()[:200]}")
+                    # Ensure stderr is a string (text=True should handle this)
+                    stderr_str = stderr if isinstance(stderr, str) else stderr.decode('utf-8', errors='replace')
+                    print(f"[LLM STDERR] {stderr_str.strip()[:200]}")
             except Exception:
                 pass
 
