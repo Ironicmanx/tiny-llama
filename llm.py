@@ -1,5 +1,6 @@
 import subprocess
 import time
+import select
 
 # You need two variables here: the path to your LLM executable and the path to your model file
 # You can get models from https://huggingface.co/models?search=gguf
@@ -7,6 +8,115 @@ import time
 
 LLM_PATH = "/home/arttu/jarvis_local/llama.cpp/build/bin/llama-cli" # Path to your LLM executable
 MODEL_PATH = "/home/arttu/jarvis_local/models/mistral-7b-instruct-v0.2.Q4_0.gguf" # Path to your model file
+
+# Configuration constants
+STALL_TIMEOUT = 10  # Seconds to wait for new output before considering stalled
+MAX_TOTAL_TIME = 120  # Maximum total time for entire generation
+MAX_CONTINUATIONS = 3  # Maximum number of continuation attempts
+MIN_RESPONSE_LENGTH = 10  # Minimum response length to consider complete
+
+
+def _read_output_nonblocking(process, timeout):
+    """Read output from process without blocking, using select."""
+    output_lines = []
+    start_time = time.time()
+    last_output_time = start_time
+    buffer = ""
+    
+    # Make stdout non-blocking on Unix systems
+    fd = process.stdout.fileno()
+    
+    while True:
+        # Check if we exceeded total timeout
+        elapsed = time.time() - start_time
+        if elapsed > timeout:
+            print(f"[Echo] Read timeout after {elapsed:.1f}s")
+            break
+            
+        # Check for stall (no output for too long)
+        time_since_output = time.time() - last_output_time
+        if time_since_output > STALL_TIMEOUT:
+            print(f"[Echo] Output stalled for {time_since_output:.1f}s, stopping read")
+            break
+        
+        # Check if process is still running
+        if process.poll() is not None:
+            # Process finished, read any remaining output
+            try:
+                remaining = process.stdout.read()
+                if remaining:
+                    buffer += remaining
+            except Exception:
+                pass
+            break
+        
+        # Use select to check if data is available (non-blocking)
+        try:
+            ready, _, _ = select.select([process.stdout], [], [], 0.5)
+            if ready:
+                chunk = process.stdout.read(1024)
+                if chunk:
+                    buffer += chunk
+                    last_output_time = time.time()
+                    
+                    # Process complete lines from buffer
+                    while '\n' in buffer:
+                        line, buffer = buffer.split('\n', 1)
+                        if line.strip():
+                            print(f"[LLM] {line.strip()}")
+                            output_lines.append(line)
+        except (OSError, ValueError):
+            # Handle select errors gracefully
+            break
+    
+    # Add any remaining buffer content
+    if buffer.strip():
+        output_lines.append(buffer.strip())
+    
+    return output_lines
+
+
+def _is_response_complete(text):
+    """Check if the response appears to be complete."""
+    if not text:
+        return False
+    
+    text = text.strip()
+    
+    # Check for sentence-ending punctuation
+    if text.endswith(('.', '!', '?', '"', "'", ')', ']')):
+        return True
+    
+    # Check for common ending patterns
+    ending_patterns = ['...', '—', '–', ':']
+    if any(text.endswith(p) for p in ending_patterns):
+        return True
+    
+    return False
+
+
+def _clean_response(text):
+    """Clean up the LLM response, removing prompt echoes and artifacts."""
+    if not text:
+        return ""
+    
+    # Remove common artifacts
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        # Skip empty lines and common artifacts
+        if not line:
+            continue
+        if line.startswith('[INST]') or line.startswith('[/INST]'):
+            continue
+        if line.startswith('llama_') or line.startswith('main:'):
+            continue
+        cleaned_lines.append(line)
+    
+    return ' '.join(cleaned_lines)
+
 
 def ask_local_llm(prompt):
     formatted_prompt = f"[INST] {prompt} [/INST]"
@@ -18,12 +128,18 @@ def ask_local_llm(prompt):
     continuation_count = 0
 
     try:
-        while True:
+        while continuation_count <= MAX_CONTINUATIONS:
+            # Check total time limit
+            if time.time() - start > MAX_TOTAL_TIME:
+                print(f"[Echo] Total time limit ({MAX_TOTAL_TIME}s) exceeded, stopping.")
+                break
+            
             # Use original prompt for first generation, then ask to continue
             if continuation_count == 0:
                 current_prompt = formatted_prompt
             else:
-                current_prompt = full_response + " [Continue the response]"
+                # For continuations, create a new prompt asking to continue
+                current_prompt = f"[INST] Continue this response: {full_response[-200:]} [/INST]"
             
             process = subprocess.Popen(
                 [
@@ -31,8 +147,8 @@ def ask_local_llm(prompt):
                     "-m", MODEL_PATH,
                     "-p", current_prompt,
                     "--threads", "4",
-                    "--ctx_size", "256",
-                    "--n_predict", "96",
+                    "--ctx_size", "512",
+                    "--n_predict", "128",
                     "--temp", "0.7",
                     "--top_k", "40",
                     "--top_p", "0.9",
@@ -40,72 +156,63 @@ def ask_local_llm(prompt):
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                bufsize=1
             )
 
-            output_lines = []
-            last_output_time = time.time()
-            stall_timeout = 3  # Shorter timeout - 3 seconds
-            process_terminated = False
+            # Calculate remaining time for this iteration
+            elapsed = time.time() - start
+            remaining_time = min(MAX_TOTAL_TIME - elapsed, 60)
             
-            while True:
-                line = process.stdout.readline()
-                if not line:
-                    # Check if process is still running
-                    if process.poll() is not None:
-                        break
-                    # Check if we've been waiting too long for output
-                    if time.time() - last_output_time > stall_timeout:
-                        print("[Echo] Generation seems stalled, continuing to next part...")
-                        process.terminate()
-                        process_terminated = True
-                        break
-                    time.sleep(0.1)
-                    continue
-                
-                print(f"[LLM] {line.strip()}")
-                output_lines.append(line)
-                last_output_time = time.time()
-
-            # Wait a bit for process to finish cleanly
-            if not process_terminated:
+            # Read output using non-blocking method
+            output_lines = _read_output_nonblocking(process, remaining_time)
+            
+            # Clean up the process
+            if process.poll() is None:
+                process.terminate()
                 try:
                     process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     process.kill()
+                    process.wait()
             
-            stderr = process.stderr.read()
-            if stderr:
-                print(f"[LLM STDERR] {stderr.strip()}")
+            # Read any stderr
+            try:
+                stderr = process.stderr.read()
+                if stderr:
+                    print(f"[LLM STDERR] {stderr.strip()[:200]}")
+            except Exception:
+                pass
 
-            current_output = "".join(output_lines).strip()
+            current_output = _clean_response('\n'.join(output_lines))
             
-            # Always add to response, even if it was terminated
+            # Add to response
             if continuation_count == 0:
                 full_response = current_output
-            else:
-                # For continuations, append only new content
-                if current_output:  # Only add if there's actually content
-                    full_response += " " + current_output
+            elif current_output:
+                full_response = full_response.rstrip() + " " + current_output
             
-            # Check if response seems complete OR if we got very little new content
-            if (current_output.endswith(('.', '!', '?')) or 
-                len(current_output) < 20 or  # Very short response likely complete
-                continuation_count >= 4):  # Reduced safety limit
-                break
-            
-            # Continue if we have content or if this was the first iteration
-            if current_output or continuation_count == 0:
-                continuation_count += 1
-                print(f"[Echo] Continuing generation... (part {continuation_count + 1})")
-            else:
+            # Check if we should stop
+            if not current_output:
                 print("[Echo] No new content generated, stopping.")
                 break
+            
+            if len(current_output) < MIN_RESPONSE_LENGTH:
+                print("[Echo] Very short response, likely complete.")
+                break
+                
+            if _is_response_complete(full_response):
+                print("[Echo] Response appears complete.")
+                break
+            
+            continuation_count += 1
+            if continuation_count <= MAX_CONTINUATIONS:
+                print(f"[Echo] Continuing generation... (part {continuation_count + 1})")
 
         duration = round(time.time() - start, 2)
-        print(f"[LLM Completed] Took {duration} seconds with {continuation_count} continuations.")
+        print(f"[LLM Completed] Took {duration} seconds with {continuation_count} continuation(s).")
 
-        return full_response
+        return full_response if full_response else "[No response generated]"
 
     except Exception as e:
         return f"[LLM Error] {e}"
