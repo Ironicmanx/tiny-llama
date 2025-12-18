@@ -2,8 +2,6 @@
 
 import subprocess
 import time
-import select
-import os
 
 # You need two variables here: the path to your LLM executable and the path to your model file
 # You can get models from https://huggingface.co/models?search=gguf
@@ -12,121 +10,8 @@ import os
 LLM_PATH = "/home/arttu/jarvis_local/llama.cpp/build/bin/llama-cli" # Path to your LLM executable
 MODEL_PATH = "/home/arttu/jarvis_local/models/mistral-7b-instruct-v0.2.Q4_0.gguf" # Path to your model file
 
-# Configuration constants
-STALL_TIMEOUT = 10  # Seconds to wait for new output before considering stalled
-MAX_TOTAL_TIME = 120  # Maximum total time for entire generation
-MAX_CONTINUATIONS = 3  # Maximum number of continuation attempts
-MIN_RESPONSE_LENGTH = 10  # Minimum response length to consider complete
-
-
-def _read_output_nonblocking(process, timeout):
-    """Read output from process without blocking, using select."""
-    output_lines = []
-    start_time = time.time()
-    last_output_time = start_time
-    buffer = ""
-    
-    # Get file descriptor for non-blocking reads
-    fd = process.stdout.fileno()
-    
-    while True:
-        # Check if we exceeded total timeout
-        elapsed = time.time() - start_time
-        if elapsed > timeout:
-            print(f"[Echo] Read timeout after {elapsed:.1f}s")
-            break
-            
-        # Check for stall (no output for too long)
-        time_since_output = time.time() - last_output_time
-        if time_since_output > STALL_TIMEOUT:
-            print(f"[Echo] Output stalled for {time_since_output:.1f}s, stopping read")
-            break
-        
-        # Check if process is still running
-        if process.poll() is not None:
-            # Process finished, read any remaining output using os.read
-            try:
-                while True:
-                    chunk = os.read(fd, 4096)
-                    if not chunk:
-                        break
-                    buffer += chunk.decode('utf-8', errors='replace')
-            except (OSError, BlockingIOError):
-                pass
-            break
-        
-        # Use select to check if data is available (non-blocking)
-        try:
-            ready, _, _ = select.select([process.stdout], [], [], 0.5)
-            if ready:
-                # Use os.read for non-blocking read
-                chunk = os.read(fd, 4096)
-                if chunk:
-                    buffer += chunk.decode('utf-8', errors='replace')
-                    last_output_time = time.time()
-                    
-                    # Process complete lines from buffer
-                    while '\n' in buffer:
-                        line, buffer = buffer.split('\n', 1)
-                        if line.strip():
-                            print(f"[LLM] {line.strip()}")
-                            output_lines.append(line)
-        except (OSError, ValueError, BlockingIOError):
-            # Handle select errors gracefully
-            break
-    
-    # Add any remaining buffer content
-    if buffer.strip():
-        output_lines.append(buffer.strip())
-    
-    return output_lines
-
-
-def _is_response_complete(text):  
-    """Check if the response appears to be complete."""
-    if not text:
-        return False
-    
-    text = text.strip()
-    
-    # Check for sentence-ending punctuation
-    if text.endswith(('.', '!', '?', '"', "'", ')', ']')):
-        return True
-    
-    # Check for common ending patterns
-    ending_patterns = ['...', '—', '–', ':']
-    if any(text.endswith(p) for p in ending_patterns):
-        return True
-    
-    return False
-
-
-def _clean_response(text):
-    """Clean up the LLM response, removing prompt echoes and artifacts."""
-    if not text:
-        return ""
-    
-    # Remove common artifacts
-    lines = text.split('\n')
-    cleaned_lines = []
-    
-    for line in lines:
-        line = line.strip()
-        # Skip empty lines and common artifacts
-        if not line:
-            continue
-        if line.startswith('[INST]') or line.startswith('[/INST]'):
-            continue
-        if line.startswith('llama_') or line.startswith('main:'):
-            continue
-        cleaned_lines.append(line)
-    
-    return ' '.join(cleaned_lines)
-
-
 def ask_local_llm(prompt):
     formatted_prompt = f"[INST] {prompt} [/INST]"
->>>>>>> 46c72bda01cb3cdc0ba5fa9f20b0ca361deff459
     print("\n[Echo Thinking] Sending prompt to LLM...")
     print(f"[Prompt] {full_prompt}")
 
@@ -219,7 +104,7 @@ def ask_local_llm(prompt):
                 print(f"[Echo] Continuing generation... (part {continuation_count + 1})")
 
         duration = round(time.time() - start, 2)
-        print(f"[LLM Completed] Took {duration} seconds with {continuation_count} continuation(s).")
+        print(f"[LLM Completed] Took {duration} seconds with {continuation_count} continuations.")
 
         return full_response if full_response else "[No response generated]"
 
