@@ -135,12 +135,7 @@ def ask_local_llm(prompt):
     continuation_count = 0
 
     try:
-        while continuation_count <= MAX_CONTINUATIONS:
-            # Check total time limit
-            if time.time() - start > MAX_TOTAL_TIME:
-                print(f"[Echo] Total time limit ({MAX_TOTAL_TIME}s) exceeded, stopping.")
-                break
-            
+        while True:
             # Use original prompt for first generation, then ask to continue
             if continuation_count == 0:
                 current_prompt = formatted_prompt
@@ -219,7 +214,7 @@ def ask_local_llm(prompt):
                 print(f"[Echo] Continuing generation... (part {continuation_count + 1})")
 
         duration = round(time.time() - start, 2)
-        print(f"[LLM Completed] Took {duration} seconds with {continuation_count} continuation(s).")
+        print(f"[LLM Completed] Took {duration} seconds with {continuation_count} continuations.")
 
         return full_response if full_response else "[No response generated]"
 
