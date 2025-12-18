@@ -82,7 +82,7 @@ def _read_output_nonblocking(process, timeout):
     return output_lines
 
 
-def _is_response_complete(text):
+def _is_response_complete(text):  
     """Check if the response appears to be complete."""
     if not text:
         return False
