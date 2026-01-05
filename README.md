@@ -7,7 +7,7 @@ A fast, minimal local AI assistant using `llama.cpp` and Mistral 7B. No cloud, n
 ## 🛠️ Requirements
 
 - Python 3.9+
-- Linux (tested on Fedora 40)
+- Linux (tested on Fedora 42) or windows 10/11
 - `llama.cpp` compiled (`make` or `cmake`)
 - At least 16GB RAM recommended
 
@@ -15,7 +15,7 @@ A fast, minimal local AI assistant using `llama.cpp` and Mistral 7B. No cloud, n
 
 ## 🚀 Quick Start
 
-Clone the repo, download a model, build the runtime, and go:
+Clone the repo, download a model, update local variables, build the runtime, and go:
 
 ```bash
 # Clone this repo
