@@ -1,4 +1,4 @@
-# 🧠 Echo Local — Lightweight Offline AI Assistant
+# Echo Local — Lightweight Offline AI Assistant
 
 A fast, minimal local AI assistant using `llama.cpp` and Mistral 7B. No cloud, no nonsense.
 
@@ -13,7 +13,7 @@ A fast, minimal local AI assistant using `llama.cpp` and Mistral 7B. No cloud, n
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 Clone the repo, download a model, update local variables, build the runtime, and go:
 
