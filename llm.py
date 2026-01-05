@@ -1,4 +1,4 @@
-#Upgrade module once new cpu arrives - Mistral 7B Instruct GGUF model with llama.cpp
+Mistral 7B Instruct GGUF model with llama.cpp
 
 import subprocess
 import time
@@ -9,14 +9,14 @@ import os
 # You can get models from https://huggingface.co/models?search=gguf
 # And you can compile llama.cpp from https://github.com/ggerganov/llama.cpp
 
-LLM_PATH = "/home/arttu/jarvis_local/llama.cpp/build/bin/llama-cli" # Path to your LLM executable
-MODEL_PATH = "/home/arttu/jarvis_local/models/mistral-7b-instruct-v0.2.Q4_0.gguf" # Path to your model file
+LLM_PATH = "/your/path/to" # Path to your LLM executable
+MODEL_PATH = "/your/path/to" # Path to your model file
 
 # Configuration constants
-STALL_TIMEOUT = 10  # Seconds to wait for new output before considering stalled
-MAX_TOTAL_TIME = 120  # Maximum total time for entire generation
-MAX_CONTINUATIONS = 3  # Maximum number of continuation attempts
-MIN_RESPONSE_LENGTH = 10  # Minimum response length to consider complete
+STALL_TIMEOUT = 10
+MAX_TOTAL_TIME = 120
+MAX_CONTINUATIONS = 3
+MIN_RESPONSE_LENGTH = 10
 
 
 def _read_output_nonblocking(process, timeout):
