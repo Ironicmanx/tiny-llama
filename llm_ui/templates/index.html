@@ -1,0 +1,513 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echo 🦞 LLM UI</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --surface2: #0f3460;
+            --accent: #e94560;
+            --text: #eee;
+            --text-dim: #999;
+            --mono: 'Courier New', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ─────────────────────────────────────── */
+        header {
+            background: var(--surface);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--accent);
+        }
+        header h1 { font-size: 1.3rem; }
+        header h1 span { color: var(--accent); }
+        .status {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+        .status-dot.busy { background: var(--accent); animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+
+        /* ── Main layout ────────────────────────────────── */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Sidebar (parameters) ───────────────────────── */
+        .sidebar {
+            width: 260px;
+            background: var(--surface);
+            padding: 16px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+            flex-shrink: 0;
+        }
+        .sidebar h3 {
+            font-size: 0.85rem;
+            color: var(--accent);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .param-group { margin-bottom: 14px; }
+        .param-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+        .param-group label .val { color: var(--text); font-family: var(--mono); }
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        input[type="number"] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid #444;
+            color: var(--text);
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-family: var(--mono);
+            font-size: 0.85rem;
+        }
+        .sidebar-actions {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .btn-sm {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid #555;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        .btn-sm:hover { background: var(--accent); border-color: var(--accent); }
+
+        /* ── Chat area ──────────────────────────────────── */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .msg {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 0.92rem;
+        }
+        .msg.user {
+            align-self: flex-end;
+            background: var(--surface2);
+            border-bottom-right-radius: 4px;
+        }
+        .msg.assistant {
+            align-self: flex-start;
+            background: var(--surface);
+            border-bottom-left-radius: 4px;
+            font-family: var(--mono);
+            font-size: 0.85rem;
+        }
+        .msg.error {
+            align-self: center;
+            background: #5c1a1a;
+            color: #ff8a8a;
+            font-size: 0.82rem;
+            border-radius: 6px;
+        }
+        .msg .meta {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 6px;
+        }
+        .typing-indicator {
+            color: var(--text-dim);
+            font-style: italic;
+            font-size: 0.85rem;
+            padding: 0 20px;
+        }
+
+        /* ── Input bar ──────────────────────────────────── */
+        .input-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 20px;
+            background: var(--surface);
+            border-top: 1px solid #333;
+        }
+        .input-bar textarea {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid #444;
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.92rem;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+        .input-bar textarea:focus { outline: none; border-color: var(--accent); }
+        .input-bar button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.92rem;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+        .input-bar button:hover { opacity: 0.85; }
+        .input-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .stop-btn {
+            background: #666 !important;
+        }
+
+        /* ── Responsive ─────────────────────────────────── */
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid #333; }
+            .msg { max-width: 95%; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1><span>🦞</span> Echo LLM</h1>
+    <div class="status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Ready</span>
+    </div>
+</header>
+
+<div class="container">
+    <!-- Sidebar: Model Parameters -->
+    <div class="sidebar">
+        <h3>⚙ Parameters</h3>
+
+        <div class="param-group">
+            <label>Temperature <span class="val" id="tempVal">0.7</span></label>
+            <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7"
+                   oninput="document.getElementById('tempVal').textContent = this.value">
+        </div>
+        <div class="param-group">
+            <label>Top K <span class="val" id="topkVal">40</span></label>
+            <input type="range" id="top_k" min="1" max="200" step="1" value="40"
+                   oninput="document.getElementById('topkVal').textContent = this.value">
+        </div>
+        <div class="param-group">
+            <label>Top P <span class="val" id="toppVal">0.9</span></label>
+            <input type="range" id="top_p" min="0" max="1" step="0.05" value="0.9"
+                   oninput="document.getElementById('toppVal').textContent = this.value">
+        </div>
+        <div class="param-group">
+            <label>Repeat Penalty <span class="val" id="repVal">1.1</span></label>
+            <input type="range" id="repeat_penalty" min="1" max="2" step="0.05" value="1.1"
+                   oninput="document.getElementById('repVal').textContent = this.value">
+        </div>
+        <div class="param-group">
+            <label>Max Tokens</label>
+            <input type="number" id="n_predict" value="512" min="16" max="2048">
+        </div>
+        <div class="param-group">
+            <label>Context Size</label>
+            <input type="number" id="ctx_size" value="2048" min="256" max="8192">
+        </div>
+        <div class="param-group">
+            <label>Threads</label>
+            <input type="number" id="threads" value="4" min="1" max="16">
+        </div>
+
+        <div class="sidebar-actions">
+            <button class="btn-sm" onclick="resetParams()">↺ Reset Defaults</button>
+            <button class="btn-sm" onclick="clearHistory()">🗑 Clear History</button>
+        </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area">
+        <div class="messages" id="messages">
+            <div class="msg assistant" id="welcomeMsg">
+                🦞 Echo ready. Mistral 7B Instruct (Q4_0) via llama-server.<br>
+                <span class="meta">Model stays in RAM — first response is the slowest, then it speeds up.</span>
+            </div>
+        </div>
+
+        <div class="input-bar">
+            <textarea id="promptInput" placeholder="Ask Echo anything..."
+                      rows="1" onkeydown="handleKey(event)"></textarea>
+            <button id="sendBtn" onclick="sendPrompt()">Send</button>
+            <button id="stopBtn" class="stop-btn" style="display:none" onclick="stopStream()">Stop</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const messagesDiv = document.getElementById('messages');
+    const promptInput = document.getElementById('promptInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    let currentReader = null;
+    let abortController = null;
+
+    // Auto-resize textarea
+    promptInput.addEventListener('input', () => {
+        promptInput.style.height = 'auto';
+        promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + 'px';
+    });
+
+    function handleKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendPrompt();
+        }
+    }
+
+    function getParams() {
+        return {
+            temperature: parseFloat(document.getElementById('temperature').value),
+            top_k: parseInt(document.getElementById('top_k').value),
+            top_p: parseFloat(document.getElementById('top_p').value),
+            repeat_penalty: parseFloat(document.getElementById('repeat_penalty').value),
+            n_predict: parseInt(document.getElementById('n_predict').value),
+            ctx_size: parseInt(document.getElementById('ctx_size').value),
+            threads: parseInt(document.getElementById('threads').value),
+        };
+    }
+
+    function addMessage(text, role, extra) {
+        const div = document.createElement('div');
+        div.className = `msg ${role}`;
+        div.textContent = text;
+        if (extra) {
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.textContent = extra;
+            div.appendChild(meta);
+        }
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        return div;
+    }
+
+    function setStatus(busy, text) {
+        statusDot.className = busy ? 'status-dot busy' : 'status-dot';
+        statusText.textContent = text;
+        sendBtn.disabled = busy;
+        sendBtn.style.display = busy ? 'none' : 'block';
+        stopBtn.style.display = busy ? 'block' : 'none';
+    }
+
+    function stopStream() {
+        if (abortController) abortController.abort();
+        setStatus(false, 'Stopped');
+    }
+
+    async function sendPrompt() {
+        const prompt = promptInput.value.trim();
+        if (!prompt) return;
+
+        promptInput.value = '';
+        promptInput.style.height = 'auto';
+
+        addMessage(prompt, 'user');
+        setStatus(true, 'Generating...');
+
+        const responseDiv = addMessage('', 'assistant');
+        const startTime = Date.now();
+
+        abortController = new AbortController();
+
+        try {
+            const resp = await fetch('/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, ...getParams() }),
+                signal: abortController.signal,
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+                addMessage(err.error || 'Request failed', 'error');
+                setStatus(false, 'Error');
+                responseDiv.remove();
+                return;
+            }
+
+            const reader = resp.body.getReader();
+            currentReader = reader;
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.error) {
+                            addMessage(`⚠ ${data.error}`, 'error');
+                        }
+                        if (data.token) {
+                            fullText += data.token;
+                            responseDiv.textContent = fullText;
+                            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        }
+                        if (data.done) {
+                            const elapsed = data.elapsed || ((Date.now() - startTime) / 1000).toFixed(1);
+                            const words = fullText.split(/\s+/).filter(w => w).length;
+                            const meta = document.createElement('div');
+                            meta.className = 'meta';
+                            meta.textContent = `${elapsed}s · ${words} words`;
+                            responseDiv.appendChild(meta);
+                        }
+                    } catch (e) { /* ignore parse errors */ }
+                }
+            }
+
+            if (!fullText.trim()) {
+                responseDiv.textContent = '[No response generated]';
+            }
+
+            setStatus(false, 'Ready');
+
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                responseDiv.textContent += '\n[Stopped]';
+                setStatus(false, 'Stopped');
+            } else {
+                addMessage(`Error: ${e.message}`, 'error');
+                setStatus(false, 'Error');
+                responseDiv.remove();
+            }
+        } finally {
+            currentReader = null;
+            abortController = null;
+        }
+    }
+
+    async function resetParams() {
+        try {
+            const resp = await fetch('/defaults');
+            const d = await resp.json();
+            for (const [key, val] of Object.entries(d)) {
+                const el = document.getElementById(key);
+                if (el) el.value = val;
+            }
+            // Update displayed values
+            document.getElementById('tempVal').textContent = d.temperature;
+            document.getElementById('topkVal').textContent = d.top_k;
+            document.getElementById('toppVal').textContent = d.top_p;
+            document.getElementById('repVal').textContent = d.repeat_penalty;
+        } catch (e) {
+            console.error('Failed to reset params:', e);
+        }
+    }
+
+    async function clearHistory() {
+        try {
+            await fetch('/history', { method: 'DELETE' });
+            // Keep the welcome message, remove everything else
+            const msgs = messagesDiv.querySelectorAll('.msg');
+            msgs.forEach((m, i) => { if (i > 0) m.remove(); });
+        } catch (e) {
+            console.error('Failed to clear history:', e);
+        }
+    }
+
+    // Health check + load history on startup
+    (async () => {
+        // Check server health
+        try {
+            const h = await fetch('/health');
+            const hd = await h.json();
+            if (hd.status !== 'ok') {
+                document.getElementById('welcomeMsg').innerHTML =
+                    '⚠ llama-server is not ready: ' + (hd.status || hd.error);
+            }
+        } catch (e) {
+            document.getElementById('welcomeMsg').innerHTML =
+                '⚠ Cannot reach server. Is app.py running?';
+        }
+
+        // Load conversation history
+        try {
+            const resp = await fetch('/history');
+            const history = await resp.json();
+            for (const entry of history) {
+                addMessage(entry.prompt, 'user');
+                const div = addMessage(entry.response, 'assistant');
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = `${entry.timestamp}${entry.elapsed ? ' · ' + entry.elapsed + 's' : ''}`;
+                div.appendChild(meta);
+            }
+        } catch (e) { /* fresh start */ }
+        console.log('Initialization complete');
+    })();
+
+    promptInput.focus();
+</script>
+
+</body>
+</html>

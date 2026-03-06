@@ -37,10 +37,6 @@ def do_you_want_to_start():
         time.sleep(0.04)
     print("\nEcho: Ready to execute!")
 
-    answer = input("Echo: Do you want to start? (y/n): ").strip().lower()
-
-    while answer not in ("y", "yes") and answer not in ("n", "no"):
-        print("Echo: Please answer with 'y' or 'n'.")
-        answer = input("Echo: Do you want to start? (y/n): ").strip().lower()
+    answer = "y"
 
     return answer in ("y", "yes")
